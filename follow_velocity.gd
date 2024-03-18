@@ -19,7 +19,7 @@ func _process(delta):
 	
 	direction = direction.normalized()
 	
-	global_position = global_position.slerp(target.global_position + direction * offset.x + Vector3.UP * offset.y, 3.2 * delta)
+	global_position = global_position.slerp(target.global_position + direction * (offset.x if !target.in_duct else 10.0) + Vector3.UP * (offset.y if !target.in_duct else 10.0), 3.2 * delta)
 	look_at(target.global_position)
 	fov = lerp(fov, start_fov + target.current_speed / target.max_speed, 3.0 * delta)
 

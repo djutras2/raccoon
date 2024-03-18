@@ -14,6 +14,3 @@ func _body_entered(body):
 		var direction = sign(offset_after_velocity - offset)
 
 		sled.enter_grind(path, clamp(offset, 0 + .0001, path.curve.get_baked_length()) - .0001, direction)
-	
-func _process(delta):
-	pass

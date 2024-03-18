@@ -25,6 +25,7 @@ var grind_balance := 0.0
 const GRIND_MAX_ANGLE = PI * .4
 const GRINDING_DIFFICULTY = 3.5 # this might could be speed/location/difficulty sensitive in the future
 
+# jumpin
 var _jump_count = 0 # 1 = jumped, 2 = double_jumped
 var _hasnt_jumped: bool:
 	get: return _jump_count == 0
@@ -32,6 +33,9 @@ var _can_double_jump: bool:
 	get: return _jump_count == 1
 var last_time_jump_pressed := -100.0
 var last_time_left_ground_not_jump := -100.0
+
+#tubing
+var in_duct := false
 
 @onready var checkpoint_transform : Transform3D = global_transform
 @onready var checkpoint_position : Vector3 = global_position
@@ -59,6 +63,9 @@ func ready():
 func _physics_process(delta):
 	#print(get_real_velocity().length())
 	
+	if(in_duct):
+		return
+	
 	var h_input := Input.get_axis("move_l", "move_r")
 	var v_input := Input.get_axis("move_d", "move_u")
 	
@@ -74,9 +81,8 @@ func _physics_process(delta):
 			grind_balance += noise.get_noise_1d(Ding.time) * delta * GRINDING_DIFFICULTY
 			grind_balance += h_input * 4.0 * delta
 			
-			global_position = rail.global_transform * rail.curve.sample_baked(_current_curve_offset)
-			
 			global_transform = rail.global_transform * rail.curve.sample_baked_with_rotation(_current_curve_offset)
+			
 			if(_current_grind_direction < 0):
 				rotate_y(PI)
 			
