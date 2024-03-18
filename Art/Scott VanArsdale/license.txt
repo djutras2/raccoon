@@ -1,0 +1,11 @@
+Model Information:
+* title:	Pizza Box Blank
+* source:	https://sketchfab.com/3d-models/pizza-box-blank-d589d532b2f64855be79403cfa0bf373
+* author:	Scott VanArsdale (https://sketchfab.com/vanart)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Pizza Box Blank" (https://sketchfab.com/3d-models/pizza-box-blank-d589d532b2f64855be79403cfa0bf373) by Scott VanArsdale (https://sketchfab.com/vanart) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

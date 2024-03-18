@@ -1,0 +1,20 @@
+[gd_scene load_steps=5 format=3 uid="uid://dkvuxb40xx0a"]
+
+[ext_resource type="Texture2D" uid="uid://ym4asrr2jw80" path="res://icon.svg" id="1_k3you"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5fsip"]
+albedo_texture = ExtResource("1_k3you")
+
+[sub_resource type="QuadMesh" id="QuadMesh_ttc4u"]
+material = SubResource("StandardMaterial3D_5fsip")
+
+[sub_resource type="ConcavePolygonShape3D" id="ConcavePolygonShape3D_vffnx"]
+data = PackedVector3Array(0.5, -0.5, 0, -0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, -0.5, 0, -0.5, 0.5, 0, 0.5, 0.5, 0)
+
+[node name="Quad" type="StaticBody3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("QuadMesh_ttc4u")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("ConcavePolygonShape3D_vffnx")
