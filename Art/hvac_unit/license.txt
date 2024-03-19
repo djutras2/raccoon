@@ -1,0 +1,11 @@
+Model Information:
+* title:	HVAC Unit
+* source:	https://sketchfab.com/3d-models/hvac-unit-0bf1acaa6f1d4a9bb38cfc91fd115f9c
+* author:	kubassa (https://sketchfab.com/kubassa)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "HVAC Unit" (https://sketchfab.com/3d-models/hvac-unit-0bf1acaa6f1d4a9bb38cfc91fd115f9c) by kubassa (https://sketchfab.com/kubassa) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
