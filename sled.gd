@@ -2,13 +2,17 @@ extends CharacterBody3D
 class_name Sled
 
 @export var camera: Camera3D
-@export var curve: Curve
+@export var extra_resistance_on_up_slope: Curve
 @export var meshes: Node3D
 @export var v_aoa_lift_curve: Curve
 @export var noise: Noise
 @export var slide_audio : AudioStreamPlayer3D
+var slide_audio_tweening := false
 
 var _previous_global_position : Vector3
+var _previous_velocity : Vector3
+var _previous_floor_velocity : Vector3
+var _previous_air_velocity : Vector3
 
 const SPEED = 20.0
 var current_speed := 0.0
@@ -30,7 +34,7 @@ var _jump_count = 0 # 1 = jumped, 2 = double_jumped
 var _hasnt_jumped: bool:
 	get: return _jump_count == 0
 var _can_double_jump: bool:
-	get: return _jump_count == 1
+	get: return false # _jump_count == 1 # double jump disabled rn
 var last_time_jump_pressed := -100.0
 var last_time_left_ground_not_jump := -100.0
 
@@ -47,18 +51,21 @@ const LIFT = 20.0
 var _was_on_floor := false
 
 # Get the gravity from the project settings to be synced with RigidBody nodes.
-var GRAVITY := 20.0
-var HOLD_JUMP_GRAVITY := 15.0
+var GRAVITY := 30.0
+var HOLD_JUMP_GRAVITY := 20.0
 var calculated_gravity : float:
 	get: # gravity is decreased when holding jump and moving up
 		return HOLD_JUMP_GRAVITY if (Input.is_action_pressed("ui_accept") and velocity.y > 0.0) else GRAVITY
 
 var v_input_speed_factor := 5.0
-@onready var max_speed := SPEED * curve.sample(1.0) + v_input_speed_factor
+@onready var max_speed := SPEED * v_input_speed_factor
+
+var acceleration := Vector3.ZERO
 
 func ready():
-	pass
+	#acceleration = 5.0 * -basis.z
 	#print("max_speed: " + str(max_speed))
+	pass
 	
 func _physics_process(delta):
 	#print(get_real_velocity().length())
@@ -77,7 +84,6 @@ func _physics_process(delta):
 			last_time_left_ground_not_jump = Ding.time
 			exit_grind()
 		else:
-			#print(noise.get_noise_1d(Ding.time))
 			grind_balance += noise.get_noise_1d(Ding.time) * delta * GRINDING_DIFFICULTY
 			grind_balance += h_input * 4.0 * delta
 			
@@ -91,16 +97,7 @@ func _physics_process(delta):
 			if(abs(grind_balance) >= 1.0):
 				exit_grind()
 				print("failed grind")
-				
-			#basis.z = _current_grind_direction * basis.z
-			#transform.rotated_local(Vector3.UP, PI * .5)
-			
-			#velocity = -basis.z.normalized() * velocity.length()
-			
-			#var current = rail.global_transform * rail.curve.sample_baked_with_rotation(_current_curve_offset)
-			#var next = rail.curve.sample_baked(_current_curve_offset + _current_grind_direction * .0001)
-			#look_at(next)
-			#velocity = next.normalized() * velocity.length()
+
 			return
 		
 	# landing and taking off
@@ -111,25 +108,23 @@ func _physics_process(delta):
 
 	# stuff
 	var speed = SPEED
+	acceleration = Vector3.DOWN * calculated_gravity
 	
 	if is_on_floor():
-		#print(get_floor_angle())
-		var down = get_floor_normal()
-		down.y = 0
-		#down = Plane(get_floor_normal()).project(get_floor_normal()).normalized()
-		#force += down * gravity * get_floor_angle() * 8.0
-		#
-		#var speed = velocity.length()
-		#var difference = speed - SPEED
-		#if(difference < 0):
-			#force += velocity.normalized() * get_floor_angle() * gravity * 100
-		#velocity = velocity.lerp(velocity * curve.sample(get_floor_angle()) * SPEED, delta * 5.0)
-		speed = SPEED * curve.sample(get_floor_angle())
+		# slope-based movement
+		var drain_slope = get_drain_slope()
+		if(get_projected_slope().y > 0): # moving up, add extra resistance
+			drain_slope *= 1.0 + extra_resistance_on_up_slope.sample(get_floor_angle()) * 5.0
+		DebugDraw3D.draw_arrow(global_position, global_position + drain_slope * 10.0, Color.CADET_BLUE, .2)
+		acceleration += drain_slope * delta * GRAVITY * sin(get_floor_angle()) * 25.0
 		
-		if(!down.is_zero_approx()):
-			meshes.look_at(lerp(global_position + down, global_position + velocity, .5), Vector3.UP)
-		else:
-			meshes.look_at(global_position + velocity, Vector3.UP)
+		## todo: friction
+		#acceleration += drain_slope * delta * GRAVITY * sin(get_floor_angle()) * .25
+		
+		#if(!down.is_zero_approx()):
+			#meshes.look_at(lerp(global_position + velocity, global_position + velocity, .5), Vector3.UP)
+		#else:
+		meshes.look_at(global_position + velocity, Vector3.UP)
 	else:
 		if(!velocity.is_zero_approx()):
 			meshes.look_at(global_position + velocity, Vector3.UP)
@@ -146,20 +141,32 @@ func _physics_process(delta):
 		#velocity.y += v_aoa_lift_curve.sample((vertical_aoa) / 80.0) * delta * LIFT
 		#print("v: " + str(v_aoa_lift_curve.sample((vertical_aoa) / 80.0)))
 
-	speed += v_input * v_input_speed_factor
-
-	current_speed = lerp(current_speed, speed, 2.0 * delta)
+	#speed += v_input * v_input_speed_factor
+	#current_speed = lerp(current_speed, speed, 2.0 * delta)
 	
 	var camRight = camera.global_basis.x
 	camRight.y = 0
 	camRight = camRight.normalized()
 
-	var new_velocity = -basis.z * current_speed
-	new_velocity.y = velocity.y
-	velocity = velocity.lerp(new_velocity, 2.0 * delta)
-	#velocity = -basis.z * current_speed
-	var force = Vector3.DOWN * calculated_gravity
-	velocity += force * delta
+	#var new_velocity = -basis.z * current_speed
+	#new_velocity.y = velocity.y
+	#velocity = velocity.lerp(new_velocity, 2.0 * delta)
+
+	velocity += acceleration * delta
+	
+	if is_on_floor():
+		velocity = velocity.lerp(Vector3.ZERO, .001) # friction
+		
+		if(!slide_audio_tweening):
+			slide_audio.volume_db = -30 + velocity.length()
+	
+	if is_on_floor():
+		var max_speed = 50
+		if(velocity.x * velocity.x + velocity.z * velocity.z > max_speed * max_speed):
+			var velocity_y = velocity.y
+			velocity.y = 0
+			velocity = velocity.normalized() * max_speed
+			velocity.y = velocity_y
 		
 	var turn = -h_input * 1.5 #if is_on_floor() else .5
 	if(v_input < 0.0):
@@ -172,24 +179,52 @@ func _physics_process(delta):
 	get_node("Node3D/Rider").position.x = lerp(get_node("Node3D/Rider").position.x, -turn * .2, 12.0 * delta)
 	get_node("Node3D/Rider").position.z = lerp(get_node("Node3D/Rider").position.z, -v_input * .8, 12.0 * delta)
 	get_node("Node3D/Box").rotation.z = lerp(get_node("Node3D/Box").rotation.z, turn * .3, 15.0 * delta)
-		
+	
+	# record last frame stuff
+	_previous_velocity = velocity
+	
+	if is_on_floor():
+		_previous_floor_velocity = get_real_velocity()
+	else:
+		_previous_air_velocity = get_real_velocity()
+	
 	_was_on_floor = is_on_floor()
-	
+		
+	# FINALLY SLIDE
 	move_and_slide()	
-	
-	DebugDraw3D.draw_arrow(global_position, global_position + velocity, Color.BLUE, .1)
-	DebugDraw3D.draw_arrow(global_position, global_position + basis.z, Color.BLUE_VIOLET, .1)
-	DebugDraw3D.draw_arrow(global_position, global_position + -meshes.basis.z, Color.RED, .1)
+	#DebugDraw3D.draw_arrow(global_position, global_position + velocity, Color.BLUE, .1)
+	#DebugDraw3D.draw_arrow(global_position, global_position + basis.z, Color.BLUE_VIOLET, .1)
+	#DebugDraw3D.draw_arrow(global_position, global_position + -meshes.basis.z, Color.RED, .1)
 
+# events
 func _landed():
 	print("landed")
 	_jump_count = 0
 	slide_audio.play()
 	slide_audio.volume_db = 80.0
-	slide_audio.create_tween().tween_property(slide_audio, "volume_db", -10, .1) #.set_ease(Tween.EASE_OUT)
+	slide_audio_tweening = true
+	var tween = slide_audio.create_tween()
+	tween.tween_property(slide_audio, "volume_db", -10, .1) #.set_ease(Tween.EASE_OUT)
+	tween.tween_callback(func(): slide_audio_tweening = false)
+	
 	if(Ding.time_since(last_time_jump_pressed) <= PRE_JUMP):
 		print("pre-jump")
 		_jump()
+	else:		
+		# maintain momentum!
+		#var momentum = get_drain_slope() * _previous_velocity.length() * sin(get_floor_angle())
+		#if(momentum.length_squared() > velocity.length_squared()):
+			#print("momentum maintained")
+			#velocity = momentum
+		#if(_previous_air_velocity.length_squared() > velocity.length_squared()):
+			#print("momentum maintained")
+			#velocity = get_drain_slope() * _previous_air_velocity.length()
+			
+		var momentum = velocity.lerp(get_drain_slope() * _previous_air_velocity.length(), .2)
+		if(momentum.length_squared() > velocity.length_squared()):
+			print("momentum maintained")
+			velocity = momentum
+			# todo: need to check dot product with velocity direction and down slope
 
 func _took_off():
 	slide_audio.stop()
@@ -218,7 +253,7 @@ func enter_grind(path: Path3D, offset: float, direction:float):
 	grind_balance = 0.0
 	_jump_count = 0
 	
-	velocity *= 1.1
+	velocity *= 1.5
 	
 	meshes.rotation = Vector3.ZERO
 	get_node("Node3D/Rider").position = Vector3.ZERO
@@ -226,15 +261,13 @@ func enter_grind(path: Path3D, offset: float, direction:float):
 
 func exit_grind():
 	var transfor = rail.global_transform * rail.curve.sample_baked_with_rotation(_current_curve_offset)
-	print(_current_grind_direction)		
-	velocity = -basis.z * velocity.length()
+	velocity = -basis.z * velocity.length() + Vector3.UP * 2.0
 	#basis.z = transfor.basis.z * _current_grind_direction
 	#basis.y = transfor.basis.y * _current_grind_direction
 	#look_at(position, position + velocity)
 		
 	rail = null
 	#global_basis.y = Vector3.UP
-	print(velocity)
 	#velocity = -transfor.basis.z.normalized() * velocity.length() * _current_grind_direction
 
 func reset():
@@ -248,3 +281,20 @@ func _input(_event):
 		
 	if Input.is_key_pressed(KEY_R):
 		reset()
+
+# helpers
+func get_drain_slope() -> Vector3:
+	if(!is_on_floor()):
+		printerr("don't call drain slope when not on ground silly")
+		return Vector3.DOWN
+
+	var down = get_floor_normal()
+	down.y = 0
+	return Plane(get_floor_normal()).project(down).normalized()
+
+func get_projected_slope() -> Vector3:
+	if(!is_on_floor()):
+		printerr("don't call drain slope when not on ground silly")
+		return Vector3.DOWN
+		
+	return Plane(get_floor_normal()).project(velocity).normalized()

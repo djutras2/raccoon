@@ -11,7 +11,7 @@ class_name Fan
 #func _body_entered(body):
 	#if(body as Sled):
 		#var sled = body as Sled
-		
+
 func _physics_process(delta):
 	for body in get_overlapping_bodies():#.filter(func(b): b as Sled):
 		(body as Sled).velocity += direction.normalized() * strength * Vector3.UP * delta
