@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3 uid="uid://dgligoh1d7tp"]
+
+[ext_resource type="Material" uid="uid://odsr6tkwwym7" path="res://Art/concrete.tres" id="1_811a8"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_opjsx"]
+material = ExtResource("1_811a8")
+size = Vector3(9, 6, 9)
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_pfam3"]
+points = PackedVector3Array(-4.5, -3, -4.5, -4.5, 3, -4.5, 4.5, -3, -4.5, -4.5, -3, 4.5, -4.5, 3, 4.5, 4.5, 3, -4.5, 4.5, -3, 4.5, 4.5, 3, 4.5)
+
+[node name="Block" type="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.483, 33.5954, 56.8985)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("BoxMesh_opjsx")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+shape = SubResource("ConvexPolygonShape3D_pfam3")

@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-@export var player : Sled
+@export var player : Raccoon
 @export var grind_indicator : ProgressBar
 @export var speed_label : Label
 @export var speed_lines : TextureRect
