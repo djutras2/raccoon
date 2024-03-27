@@ -4,6 +4,7 @@ class_name Raccoon
 @export var camera: Camera3D
 @export var meshes: Node3D
 @export var noise: Noise
+@export var acceleration_from_dot: Curve
 
 var _previous_global_position : Vector3
 var _previous_velocity : Vector3
@@ -11,7 +12,8 @@ var _previous_floor_velocity : Vector3
 var _previous_air_velocity : Vector3
 var rotation_direction: float
 
-const SPEED = 350.0
+const SPEED = 380.0
+
 var current_speed := 0.0
 var current_direction : Vector3
 const JUMP_VELOCITY = 10.0
@@ -36,7 +38,8 @@ var last_time_jump_pressed := -100.0
 var last_time_left_ground_not_jump := -100.0
 
 # landing
-var _slide := Vector3.ZERO
+var _slip := Vector3.ZERO
+var _on_ledge := false
 
 #tubing
 var in_duct := false
@@ -54,7 +57,7 @@ var GRAVITY := 30.0
 var HOLD_JUMP_GRAVITY := 20.0
 var calculated_gravity : float:
 	get: # gravity is decreased when holding jump and moving up
-		return HOLD_JUMP_GRAVITY if (Input.is_action_pressed("ui_accept") and velocity.y > 0.0) else GRAVITY
+		return HOLD_JUMP_GRAVITY if (Input.is_action_pressed("jump") and velocity.y > 0.0) else GRAVITY
 
 var v_input_speed_factor := 5.0
 @onready var max_speed := SPEED * v_input_speed_factor
@@ -67,7 +70,7 @@ func ready():
 	pass
 	
 func _physics_process(delta):
-	if(in_duct):
+	if(in_duct || _on_ledge):
 		return
 	
 	var input := Vector3.ZERO
@@ -120,27 +123,53 @@ func _physics_process(delta):
 	var movement_velocity: Vector3
 	var applied_velocity: Vector3
 	
+	var lerp = (10.0 if Input.is_action_pressed("sprint") else 6.0)
+			
+	if(!cam_input.is_zero_approx() and !velocity.is_zero_approx()):
+		lerp *= acceleration_from_dot.sample((cam_input.normalized().dot(velocity.normalized()) + 1) * .5)
+	
 	if is_on_floor():
 		movement_velocity = project_on_current_floor_normal(cam_input) * speed * delta
+		if(Input.is_action_pressed("sprint")):
+			movement_velocity *= 1.3
 		movement_velocity.y = velocity.y
-		applied_velocity = velocity.lerp(movement_velocity, delta * 10)
+
+		applied_velocity = velocity.lerp(movement_velocity, delta * lerp)
 	else:
+		lerp *= .25
 		movement_velocity = cam_input * speed * delta
 		movement_velocity.y = velocity.y
-		applied_velocity = velocity.lerp(movement_velocity, delta * 1)
-	
+		applied_velocity = velocity.lerp(movement_velocity, delta * lerp)
+		
+		# ledge grabbing
+		if !_on_ledge and is_on_wall() and velocity.y <= 1.0 and !cam_input.is_zero_approx() and cam_input.dot(get_wall_normal()) < -.85:
+			var body_origin := global_position
+			var body_query = PhysicsRayQueryParameters3D.create(body_origin, body_origin - get_wall_normal() * 1.5)
+			body_query.exclude.append(get_rid())
+			var result = get_world_3d().direct_space_state.intersect_ray(body_query)
+			DebugDraw3D.draw_arrow(body_origin, body_origin - get_wall_normal() , Color.BLUE, .1)
+			if result:
+				var head_origin := global_position + Vector3.UP * 1.1
+				var head_query = PhysicsRayQueryParameters3D.create(head_origin, head_origin - get_wall_normal() * 1.5)
+				head_query.exclude.append(get_rid())
+				var head_result = get_world_3d().direct_space_state.intersect_ray(head_query)
+				DebugDraw3D.draw_arrow(head_origin, head_origin - get_wall_normal(), Color.BLUE, .1)
+				if(!head_result):
+					grab_ledge()
+							
 	velocity = applied_velocity
 	
-	velocity += _slide * delta
+	velocity += _slip * delta
 	velocity += acceleration * delta
 	
 	# record last frame stuff
 	_previous_velocity = velocity
 	
 	if is_on_floor():
-		_slide = _slide.lerp(Vector3.ZERO, delta * 5.0)
+		_slip = _slip.lerp(Vector3.ZERO, delta * 7.0)
 		_previous_floor_velocity = get_real_velocity()
 	else:
+		_slip = Vector3.ZERO
 		_previous_air_velocity = get_real_velocity()
 	
 	_was_on_floor = is_on_floor()
@@ -149,10 +178,12 @@ func _physics_process(delta):
 	move_and_slide()	
 	
 	# rotation
-	if Vector2(velocity.z, velocity.x).length() > 0:
+	if !cam_input.is_zero_approx():
+		rotation_direction = Vector2(cam_input.z, cam_input.x).angle()
+	else: if !Vector2(velocity.z, velocity.x).is_zero_approx():
 		rotation_direction = Vector2(velocity.z, velocity.x).angle()
 		
-	rotation.y = lerp_angle(rotation.y, rotation_direction, delta * 10)	
+	rotation.y = lerp_angle(rotation.y, rotation_direction, delta * 25)	
 	meshes.scale = meshes.scale.lerp(Vector3(1, 1, 1), delta * 10)
 	
 	#DebugDraw3D.draw_arrow(global_position, global_position + velocity, Color.BLUE, .1)
@@ -170,8 +201,9 @@ func _landed():
 		print("pre-jump")
 		_jump()
 	else:	
-		if(rad_to_deg(get_floor_angle()) >= 1.0):
-			_slide = get_drain_slope() * get_floor_angle() * abs(_previous_air_velocity.y) * 50.0
+		if(rad_to_deg(get_floor_angle()) >= 1.0 and rad_to_deg(get_floor_angle()) <= 45.0):
+			print(rad_to_deg(get_floor_angle()))
+			_slip = get_drain_slope() * get_floor_angle() * abs(_previous_air_velocity.y) * 30.0
 		
 		pass	
 		# maintain momentum!
@@ -189,10 +221,11 @@ func _took_off():
 
 func _jump():
 	last_time_jump_pressed = Ding.time
-	_slide = Vector3.ZERO
+	_slip = Vector3.ZERO
 	
-	if(grinding || is_on_floor() || Ding.time_since(last_time_left_ground_not_jump) <= COYOTE):
+	if(_on_ledge || grinding || is_on_floor() || Ding.time_since(last_time_left_ground_not_jump) <= COYOTE):
 		if(grinding): exit_grind()
+		if(_on_ledge): _on_ledge = false
 		velocity.y = JUMP_VELOCITY
 		_jump_count = 1 # has jumped once
 		meshes.scale = Vector3(0.5, 1.5, 0.5)
@@ -213,8 +246,6 @@ func enter_grind(path: Path3D, offset: float, direction:float):
 	velocity *= 1.5
 	
 	meshes.rotation = Vector3.ZERO
-	get_node("Node3D/Rider").position = Vector3.ZERO
-	get_node("Node3D/Box").rotation = Vector3.ZERO
 
 func exit_grind():
 	var transfor = rail.global_transform * rail.curve.sample_baked_with_rotation(_current_curve_offset)
@@ -227,17 +258,27 @@ func exit_grind():
 	#global_basis.y = Vector3.UP
 	#velocity = -transfor.basis.z.normalized() * velocity.length() * _current_grind_direction
 
+func grab_ledge():
+	print("grabbed ledge")
+	_on_ledge = true
+	_jump_count = 0
+
 func reset():
 	velocity = Vector3.ZERO
 	global_transform = checkpoint_transform
 	#global_position = checkpoint_position
 
 func _input(_event):
-	if Input.is_action_just_pressed("ui_accept"):
+	if Input.is_action_just_pressed("jump"):
 		_jump()
 		
 	if Input.is_key_pressed(KEY_R):
 		reset()
+		
+	if Input.is_action_just_pressed("duck"):
+		if(_on_ledge):
+			_on_ledge = false
+			_jump_count = 1
 
 # helpers
 func project_on_current_floor_normal(vector:Vector3) -> Vector3:
