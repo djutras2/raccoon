@@ -22,8 +22,11 @@ var current_speed := 0.0
 var current_direction : Vector3
 const JUMP_VELOCITY = 10.0
 
-# fall max
+# falling/rolling
 var _fall_max_speed := 20.0
+var _fall_max_speed_with_roll := 23.0
+var rolling := false
+var roll_duration := .25
 
 # grinding
 var grinding : bool:
@@ -93,6 +96,18 @@ func _physics_process(delta):
 	var input := Vector3.ZERO
 	input.x = Input.get_axis("move_l", "move_r")
 	input.y = Input.get_axis("move_d", "move_u")
+	
+	if(rolling):
+		velocity.y = 0
+		
+		if(input.x != 0.0):
+			#rotate(Vector3.UP, 1.5 * delta)
+			velocity = velocity.rotated(Vector3.UP, 1.5 * delta)
+		
+		if is_on_floor(): velocity = get_projected_slope() * velocity.length()
+		
+		move_and_slide()
+		return
 	
 	# grinding
 	if(grinding):
@@ -211,9 +226,25 @@ func _physics_process(delta):
 func _landed():
 	print("landed")
 	
-	print(_previous_air_velocity.y)
+	var floor = get_slide_collision(0).get_collider() as StaticBody3D
+	if floor:
+		if floor.physics_material_override:			
+			if !floor.physics_material_override.absorbent:
+				velocity.y = -_previous_air_velocity.y * floor.physics_material_override.bounce
+				meshes.scale = Vector3(1.25, 0.75, 1.25)
+			else:
+				velocity.y = 0.0
+				meshes.scale = Vector3(1.25, 1.0 - floor.physics_material_override.bounce, 1.25)
+			return
+	
+	if(Input.is_action_pressed("duck")):
+		if abs(_previous_air_velocity.y) > _fall_max_speed_with_roll: crash()
+		else: enter_roll()
+		return
+				
 	if abs(_previous_air_velocity.y) > _fall_max_speed:
 		crash()
+		return
 	
 	_jump_count = 0
 	meshes.scale = Vector3(1.25, 0.75, 1.25)
@@ -256,6 +287,17 @@ func _jump():
 		if(_can_double_jump):
 			velocity.y = max(JUMP_VELOCITY * .8, velocity.y + JUMP_VELOCITY * .8)
 			_jump_count = 2
+
+func enter_roll():
+	print("roll")
+	meshes.scale.y = .2
+	velocity.y = 0
+	velocity = velocity.normalized() * _previous_air_velocity.length() * .5
+	rolling = true
+	
+	await get_tree().create_timer(roll_duration).timeout
+	rolling = false
+	meshes.scale.y = 1.0
 
 func enter_grind(path: Path3D, offset: float, direction:float):
 	rail = path
@@ -304,31 +346,34 @@ func reset():
 	skelly.physical_bones_stop_simulation()
 	#global_position = checkpoint_position
 
-func _input(_event):
-	if Input.is_action_just_pressed("jump"):
-		_jump()
-		
+# input
+func _input(_event):		
 	if Input.is_action_just_pressed("reset"):
 		reset()
-		
+	
+	if dead: return	
+	
+	if Input.is_action_just_pressed("jump"):
+		_jump()
+
 	if Input.is_key_pressed(KEY_X):
 		crash()
 		
 	if Input.is_action_just_pressed("duck"):
-		if(_on_ledge):
+		if _on_ledge:
 			exit_ledge()
 			_jump_count = 1
 
 # helpers
 func project_on_current_floor_normal(vector:Vector3) -> Vector3:
-	if(!is_on_floor()):
+	if !is_on_floor():
 		printerr("don't call drain slope when not on ground silly")
 		return Vector3.DOWN
 		
 	return Plane(get_floor_normal()).project(vector).normalized()
 
 func get_drain_slope() -> Vector3:
-	if(!is_on_floor()):
+	if !is_on_floor():
 		printerr("don't call drain slope when not on ground silly")
 		return Vector3.DOWN
 
@@ -337,7 +382,7 @@ func get_drain_slope() -> Vector3:
 	return Plane(get_floor_normal()).project(down).normalized()
 
 func get_projected_slope() -> Vector3:
-	if(!is_on_floor()):
+	if !is_on_floor():
 		printerr("don't call drain slope when not on ground silly")
 		return Vector3.DOWN
 		
