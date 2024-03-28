@@ -5,10 +5,11 @@ class_name Raccoon
 @export var meshes: Node3D
 @export var noise: Noise
 @export var acceleration_from_dot: Curve
+@export var _animation_tree: AnimationTree
 #@export var _jump_factor_from_speed: Curve
 
 @onready var collider: CollisionShape3D = get_node("CollisionShape3D")
-@onready var skelly: Skeleton3D = get_node("Node3D/Raccoon") as Skeleton3D
+@onready var skelly: Skeleton3D = get_node("Node3D/AuxScene2/AuxScene/Node/Skeleton3D") as Skeleton3D
 
 var input := Vector3.ZERO
 var cam_input := Vector3.ZERO
@@ -25,6 +26,7 @@ const DUCK_SPEED := 2.0
 const SPRINT_SPEED := 13.0
 var actual_sprint_speed := SPEED
 const SPRINT_SPEED_DECAY := 2.0
+const SLIDE_DECAY := 1.6
 
 var current_speed := 0.0
 var current_direction : Vector3
@@ -169,7 +171,7 @@ func _physics_process(delta):
 			acceleration += get_drain_slope() * sin(get_floor_angle()) * 50.0
 			#print(get_drain_slope() * sin(get_floor_angle()) * 100.0)
 			velocity += acceleration * delta
-			velocity = velocity.lerp(Vector3.ZERO, delta * 2.0)
+			velocity = velocity.lerp(Vector3.ZERO, delta * SLIDE_DECAY)
 			if Ding.flattened_length(velocity) < .5:
 				exit_slide()
 		else:
@@ -212,6 +214,16 @@ func _physics_process(delta):
 	
 	if is_on_floor():
 		_slip = _slip.lerp(Vector3.ZERO, delta * 7.0)
+		_animation_tree["parameters/RunBlend/blend_amount"] = remap(clamp(Ding.flattened_length(get_real_velocity()), SPEED, SPRINT_SPEED), SPEED, SPRINT_SPEED, 0.0, 1.0)
+		_animation_tree["parameters/RunTimeScale/scale"] = remap(clamp(Ding.flattened_length(get_real_velocity()), 0, SPEED), 0, SPEED, 0.6, 1.0)
+			
+		if get_real_velocity().length_squared() < .2 and _previous_floor_velocity.length_squared() >= .2:
+			print("start idle")
+			_animation_tree["parameters/Transition/transition_request"] = "idle"
+		elif get_real_velocity().length_squared() > .2 and _previous_floor_velocity.length_squared() <= .2:
+			print("start run")
+			_animation_tree["parameters/Transition/transition_request"] = "run"
+			
 		_previous_floor_velocity = get_real_velocity()
 	else:
 		_slip = Vector3.ZERO
@@ -229,8 +241,8 @@ func _physics_process(delta):
 		rotation_direction = Vector2(velocity.z, velocity.x).angle()
 		
 	rotation.y = lerp_angle(rotation.y, rotation_direction, delta * 25)	
-	var goal_scale = Vector3(1.25, .2, 1.25) if Input.is_action_pressed("duck") else Vector3.ONE
-	meshes.scale = meshes.scale.lerp(goal_scale, delta * 10)
+	#var goal_scale = Vector3(1.25, .2, 1.25) if Input.is_action_pressed("duck") else Vector3.ONE
+	meshes.scale = meshes.scale.lerp( Vector3.ONE, delta * 10)
 	
 	#DebugDraw3D.draw_arrow(global_position, global_position + velocity, Color.BLUE, .1)
 	#DebugDraw3D.draw_arrow(global_position, global_position + basis.z, Color.BLUE_VIOLET, .1)
@@ -314,18 +326,22 @@ func _jump():
 
 func enter_roll():
 	print("roll")
-	meshes.scale.y = .2
+	#meshes.scale.y = .2
 	velocity.y = 0
 	rolling = true
 	velocity = get_projected_slope() * _previous_air_velocity.length() * .9
 	
-	var raccoon = get_node("Node3D/Raccoon") as Node3D
-	create_tween().tween_property(raccoon, "rotation:x", raccoon.rotation.x + 2.0 * PI, _roll_duration)
+	#var raccoon = get_node("Node3D/Raccoon") as Node3D
+	#create_tween().tween_property(raccoon, "rotation:x", raccoon.rotation.x + 2.0 * PI, _roll_duration)
+	_animation_tree["parameters/Transition/transition_request"] = "roll"
+	
 	await get_tree().create_timer(_roll_duration).timeout
 	rolling = false
 	
 	if Input.is_action_pressed("duck"):
 		enter_slide()
+	else:
+		_animation_tree["parameters/Transition/transition_request"] = "run"
 	#sliding = false
 	#_slip = Vector3.ZERO
 	#meshes.scale.y = 1.0
@@ -373,14 +389,16 @@ func enter_slide():
 	if(rolling): return
 	if Ding.flattened_length(velocity) > 2.0:
 		print("sliding")
+		_animation_tree["parameters/Transition/transition_request"] = "slide"
 		sliding = true
 		velocity = velocity * 1.1 # lil boost
 		print(velocity)
-	meshes.scale.y = .2
+	#meshes.scale.y = .2
 
 func exit_slide():
 	sliding = false
 	print("done sliding")
+	_animation_tree["parameters/Transition/transition_request"] = "run"
 
 func reset():
 	print("reset")
