@@ -6,6 +6,10 @@ class_name Raccoon
 @export var noise: Noise
 @export var acceleration_from_dot: Curve
 
+@onready var collider: CollisionShape3D = get_node("CollisionShape3D")
+@onready var skelly: Skeleton3D = get_node("Node3D/Raccoon") as Skeleton3D
+
+var dead := false
 var _previous_global_position : Vector3
 var _previous_velocity : Vector3
 var _previous_floor_velocity : Vector3
@@ -17,6 +21,9 @@ const SPEED = 380.0
 var current_speed := 0.0
 var current_direction : Vector3
 const JUMP_VELOCITY = 10.0
+
+# fall max
+var _fall_max_speed := 20.0
 
 # grinding
 var grinding : bool:
@@ -71,10 +78,16 @@ var acceleration := Vector3.ZERO
 func ready():
 	#acceleration = 5.0 * -basis.z
 	#print("max_speed: " + str(max_speed))
+	skelly.physical_bones_stop_simulation()
 	pass
 	
 func _physics_process(delta):
 	if(in_duct || _on_ledge):
+		return
+	
+	if(dead):
+		velocity += GRAVITY * Vector3.DOWN
+		move_and_slide()
 		return
 	
 	var input := Vector3.ZERO
@@ -197,8 +210,12 @@ func _physics_process(delta):
 # events
 func _landed():
 	print("landed")
-	_jump_count = 0
 	
+	print(_previous_air_velocity.y)
+	if abs(_previous_air_velocity.y) > _fall_max_speed:
+		crash()
+	
+	_jump_count = 0
 	meshes.scale = Vector3(1.25, 0.75, 1.25)
 
 	if(Ding.time_since(last_time_jump_pressed) <= PRE_JUMP):
@@ -271,17 +288,31 @@ func exit_ledge():
 	_last_time_left_ledge = Ding.time
 	_on_ledge = false
 	
+func crash():
+	print("crashed")
+	
+	#collider.disabled = true
+	#skelly.process_mode = Node.PROCESS_MODE_INHERIT
+	dead = true
+	skelly.physical_bones_start_simulation()
+
 func reset():
+	print("reset")
+	dead = false
 	velocity = Vector3.ZERO
 	global_transform = checkpoint_transform
+	skelly.physical_bones_stop_simulation()
 	#global_position = checkpoint_position
 
 func _input(_event):
 	if Input.is_action_just_pressed("jump"):
 		_jump()
 		
-	if Input.is_key_pressed(KEY_R):
+	if Input.is_action_just_pressed("reset"):
 		reset()
+		
+	if Input.is_key_pressed(KEY_X):
+		crash()
 		
 	if Input.is_action_just_pressed("duck"):
 		if(_on_ledge):
