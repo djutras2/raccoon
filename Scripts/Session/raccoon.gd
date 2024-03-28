@@ -40,6 +40,9 @@ var last_time_left_ground_not_jump := -100.0
 # landing
 var _slip := Vector3.ZERO
 var _on_ledge := false
+var _last_time_left_ledge := -100.0
+var can_grab_ledge : bool:
+	get: return !_on_ledge and is_on_wall() and velocity.y <= 1.0 and Ding.time - _last_time_left_ledge >= LEDGE_COOLDOWN
 
 #tubing
 var in_duct := false
@@ -50,6 +53,7 @@ var in_duct := false
 const COYOTE = .3
 const PRE_JUMP = .2
 const LIFT = 20.0
+const LEDGE_COOLDOWN = .2
 
 var _was_on_floor := false
 
@@ -142,7 +146,7 @@ func _physics_process(delta):
 		applied_velocity = velocity.lerp(movement_velocity, delta * lerp)
 		
 		# ledge grabbing
-		if !_on_ledge and is_on_wall() and velocity.y <= 1.0 and !cam_input.is_zero_approx() and cam_input.dot(get_wall_normal()) < -.85:
+		if can_grab_ledge and !cam_input.is_zero_approx() and cam_input.dot(get_wall_normal()) < -.85:
 			var body_origin := global_position
 			var body_query = PhysicsRayQueryParameters3D.create(body_origin, body_origin - get_wall_normal() * 1.5)
 			body_query.exclude.append(get_rid())
@@ -225,7 +229,7 @@ func _jump():
 	
 	if(_on_ledge || grinding || is_on_floor() || Ding.time_since(last_time_left_ground_not_jump) <= COYOTE):
 		if(grinding): exit_grind()
-		if(_on_ledge): _on_ledge = false
+		if(_on_ledge): exit_ledge()
 		velocity.y = JUMP_VELOCITY
 		_jump_count = 1 # has jumped once
 		meshes.scale = Vector3(0.5, 1.5, 0.5)
@@ -262,7 +266,11 @@ func grab_ledge():
 	print("grabbed ledge")
 	_on_ledge = true
 	_jump_count = 0
-
+	
+func exit_ledge():
+	_last_time_left_ledge = Ding.time
+	_on_ledge = false
+	
 func reset():
 	velocity = Vector3.ZERO
 	global_transform = checkpoint_transform
@@ -277,7 +285,7 @@ func _input(_event):
 		
 	if Input.is_action_just_pressed("duck"):
 		if(_on_ledge):
-			_on_ledge = false
+			exit_ledge()
 			_jump_count = 1
 
 # helpers
