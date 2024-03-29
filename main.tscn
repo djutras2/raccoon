@@ -1,4 +1,4 @@
-[gd_scene load_steps=45 format=3 uid="uid://b1kgoae0kitiv"]
+[gd_scene load_steps=49 format=3 uid="uid://b1kgoae0kitiv"]
 
 [ext_resource type="Script" path="res://Scripts/Session/session-ui.gd" id="1_hgwux"]
 [ext_resource type="Shader" path="res://Art/Shaders/speed_lines.gdshader" id="2_yp38n"]
@@ -46,6 +46,21 @@ size = Vector3(35.225, 100, 50)
 
 [sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_1kbyc"]
 points = PackedVector3Array(17.6125, 50, 25, -17.6125, 50, 25, 17.6125, -50, 25, 17.6125, 50, -25, -17.6125, 50, -25, -17.6125, -50, 25, 17.6125, -50, -25, -17.6125, -50, -25)
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_5bjo6"]
+friction = 0.46
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pur8h"]
+albedo_color = Color(0.705882, 0.878431, 1, 1)
+albedo_texture = ExtResource("7_eelya")
+uv1_scale = Vector3(8, 8, 8)
+
+[sub_resource type="BoxMesh" id="BoxMesh_iwogx"]
+material = SubResource("StandardMaterial3D_pur8h")
+size = Vector3(9, 6, 9)
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_pfam3"]
+points = PackedVector3Array(-4.5, -3, -4.5, -4.5, 3, -4.5, 4.5, -3, -4.5, -4.5, -3, 4.5, -4.5, 3, 4.5, 4.5, 3, -4.5, 4.5, -3, 4.5, 4.5, 3, 4.5)
 
 [sub_resource type="BoxMesh" id="BoxMesh_exfec"]
 material = ExtResource("3_unp6f")
@@ -195,7 +210,14 @@ camera = NodePath("../Camera3D")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.894154, -0.341997, -0.28901, 0, -0.645458, 0.763796, -0.447759, 0.682951, 0.577139, 0, 3.83759, 0)
+light_energy = 0.5
 shadow_enabled = true
+
+[node name="DirectionalLight3D2" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 3.83759, 0)
+light_energy = 0.5
+shadow_enabled = true
+shadow_blur = 4.881
 
 [node name="Course" type="Node3D" parent="."]
 
@@ -262,6 +284,16 @@ transform = Transform3D(0.985271, 0.171001, 0, -0.171001, 0.985271, 0, 0, 0, 1, 
 
 [node name="Block7" parent="Course" instance=ExtResource("7_w8l64")]
 transform = Transform3D(0.893329, 0.155043, -0.421811, -0.171001, 0.985271, 0, 0.415598, 0.07213, 0.906684, 2.55747, 24.5834, 66.2811)
+
+[node name="Block19" type="StaticBody3D" parent="Course"]
+transform = Transform3D(2.76896, 0.263588, 0.158442, -0.769811, 0.964251, -0.0154407, -0.456427, -0.0272218, 0.987248, -14.1542, 25.2181, 70.6303)
+physics_material_override = SubResource("PhysicsMaterial_5bjo6")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Course/Block19"]
+mesh = SubResource("BoxMesh_iwogx")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Course/Block19"]
+shape = SubResource("ConvexPolygonShape3D_pfam3")
 
 [node name="StaticBody3D2" type="StaticBody3D" parent="Course"]
 transform = Transform3D(0.988065, -0.154038, 0, 0.154038, 0.988065, 0, 0, 0, 1, 9.3069, 1.87433, -62.3099)

@@ -78,7 +78,7 @@ const LEDGE_COOLDOWN = .2
 var _was_on_floor := false
 
 var GRAVITY := 30.0
-var HOLD_JUMP_GRAVITY := 20.0
+var HOLD_JUMP_GRAVITY := 15.0
 var calculated_gravity : float:
 	get: # gravity is decreased when holding jump and moving up
 		return HOLD_JUMP_GRAVITY if (Input.is_action_pressed("jump") and velocity.y > 0.0) else GRAVITY
@@ -147,7 +147,7 @@ func _physics_process(delta):
 	# stuff
 	var goal_velocity: Vector3
 	
-	var lerp = 8.0
+	var lerp = 12.0
 			
 	if(!cam_input.is_zero_approx() and !velocity.is_zero_approx()):
 		lerp *= acceleration_from_dot.sample((cam_input.normalized().dot(velocity.normalized()) + 1) * .5)
@@ -198,7 +198,6 @@ func _physics_process(delta):
 					grab_ledge()
 					DebugDraw3D.draw_arrow(head_origin, head_origin - get_wall_normal(), Color.GREEN, .1)
 				else:
-					print(head_result["collider"])
 					DebugDraw3D.draw_arrow(head_origin, head_origin - get_wall_normal(), Color.RED, .1)
 			else:
 				DebugDraw3D.draw_arrow(body_origin, body_origin - get_wall_normal() , Color.RED, .1)
@@ -252,23 +251,28 @@ func _landed():
 	
 	_animation_tree["parameters/Transition/transition_request"] = "run"
 	
-	var floor = get_slide_collision(0).get_collider() as StaticBody3D
-	if floor:
-		if floor.physics_material_override:			
-			if !floor.physics_material_override.absorbent:
-				velocity.y = -_previous_air_velocity.y * floor.physics_material_override.bounce
-				meshes.scale = Vector3(1.25, 0.75, 1.25)
-			else:
-				velocity.y = 0.0
-				meshes.scale = Vector3(1.25, 1.0 - floor.physics_material_override.bounce, 1.25)
-			return
+	var fall_speed = abs(_previous_air_velocity.y)
+	
+	var mat = get_collider_material()
+	if mat:	
+		if !mat.absorbent:
+			velocity.y = -_previous_air_velocity.y * mat.bounce
+			meshes.scale = Vector3(1.25, 0.75, 1.25)
+		else:
+			velocity.y = 0.0
+			meshes.scale = Vector3(1.25, 1.0 - mat.bounce, 1.25)
+			fall_speed *= mat.bounce
+		
+		if(rad_to_deg(get_floor_angle()) >= 1.0 and rad_to_deg(get_floor_angle()) <= 45.0):
+			print(rad_to_deg(get_floor_angle()))
+			_slip = get_drain_slope() * get_floor_angle() * fall_speed * 30.0 * (1.0 - mat.friction)
 	
 	if(Input.is_action_pressed("duck")):
-		if abs(_previous_air_velocity.y) > _fall_max_speed_with_roll: crash()
+		if fall_speed > _fall_max_speed_with_roll: crash()
 		else: enter_slide()
 		return
 				
-	if abs(_previous_air_velocity.y) > _fall_max_speed:
+	if fall_speed > _fall_max_speed:
 		crash()
 		return
 	
@@ -278,20 +282,6 @@ func _landed():
 	if(Ding.time_since(last_time_jump_pressed) <= PRE_JUMP):
 		print("pre-jump")
 		_jump()
-	else:	
-		if(rad_to_deg(get_floor_angle()) >= 1.0 and rad_to_deg(get_floor_angle()) <= 45.0):
-			print(rad_to_deg(get_floor_angle()))
-			_slip = get_drain_slope() * get_floor_angle() * abs(_previous_air_velocity.y) * 30.0
-		
-		pass	
-		# maintain momentum!
-		# todo
-			
-		#var momentum = velocity.lerp(get_drain_slope() * _previous_air_velocity.length(), .2)
-		#if(momentum.length_squared() > velocity.length_squared()):
-			#print("momentum maintained")
-			#velocity = momentum
-			# todo: need to check dot product with velocity direction and down slope
 
 func _took_off():	
 	if(sliding): exit_slide()
@@ -372,7 +362,6 @@ func enter_slide():
 		prev_velocity.y *= .5
 		velocity = get_projected_slope() * prev_velocity.length()
 		#velocity = velocity * 1.1 # lil boost
-		print(velocity)
 	#meshes.scale.y = .2
 
 func exit_slide():
@@ -439,3 +428,11 @@ func get_projected_slope() -> Vector3:
 		return Vector3.DOWN
 		
 	return Plane(get_floor_normal()).project(velocity).normalized()
+	
+func get_collider_material(index:= 0) -> PhysicsMaterial:
+	var floor = get_slide_collision(index).get_collider() as StaticBody3D
+	if floor:
+		if floor.physics_material_override:		
+			return floor.physics_material_override
+	
+	return null
