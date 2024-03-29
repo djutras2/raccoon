@@ -21,22 +21,20 @@ var _previous_floor_velocity : Vector3
 var _previous_air_velocity : Vector3
 var rotation_direction: float
 
-const SPEED := 6.5
+const SPEED := 5.5
 const DUCK_SPEED := 2.0
-const SPRINT_SPEED := 13.0
+const SPRINT_SPEED := 10.0
 var actual_sprint_speed := SPEED
 const SPRINT_SPEED_DECAY := 2.0
 const SLIDE_DECAY := 1.6
 
 var current_speed := 0.0
 var current_direction : Vector3
-const JUMP_VELOCITY := 10.0
+const JUMP_VELOCITY := 9.5
 
 # falling/rolling
 var _fall_max_speed := 20.0
 var _fall_max_speed_with_roll := 23.0
-var rolling := false
-var _roll_duration := .25
 var sliding = false
 
 # grinding
@@ -57,13 +55,14 @@ var _can_double_jump: bool:
 	get: return false # _jump_count == 1 # double jump disabled rn
 var last_time_jump_pressed := -100.0
 var last_time_left_ground_not_jump := -100.0
+var _horizontal_speed_on_last_takeoff := Vector3.ZERO
 
 # landing
 var _slip := Vector3.ZERO
 var _on_ledge := false
 var _last_time_left_ledge := -100.0
 var can_grab_ledge : bool:
-	get: return !_on_ledge and is_on_wall() and velocity.y <= 1.0 and Ding.time - _last_time_left_ledge >= LEDGE_COOLDOWN
+	get: return !_on_ledge and is_on_wall() and velocity.y <= 1.5 and Ding.time - _last_time_left_ledge >= LEDGE_COOLDOWN
 
 #tubing
 var in_duct := false
@@ -113,18 +112,6 @@ func _physics_process(delta):
 	var cam_forward = Ding.flattened(-camera.global_basis.z).normalized() * input.y
 	var cam_right = Ding.flattened(camera.global_basis.x).normalized() * input.x
 	cam_input = (cam_forward + cam_right)
-	
-	if(rolling):
-		velocity.y = 0
-		
-		if(input.x != 0.0):
-			#rotate(Vector3.UP, 1.5 * delta)
-			velocity = velocity.rotated(Vector3.UP, 1.5 * delta)
-		if !get_drain_slope().is_zero_approx():
-			velocity = velocity.lerp(get_drain_slope() * velocity.length(), 2.0 * delta)
-		
-		move_and_slide()
-		return
 
 	# grinding
 	if(grinding):
@@ -165,14 +152,14 @@ func _physics_process(delta):
 	if(!cam_input.is_zero_approx() and !velocity.is_zero_approx()):
 		lerp *= acceleration_from_dot.sample((cam_input.normalized().dot(velocity.normalized()) + 1) * .5)
 	
-	if is_on_floor():					
+	if is_on_floor():
 		# sliding
 		if sliding:
 			acceleration += get_drain_slope() * sin(get_floor_angle()) * 50.0
 			#print(get_drain_slope() * sin(get_floor_angle()) * 100.0)
 			velocity += acceleration * delta
 			velocity = velocity.lerp(Vector3.ZERO, delta * SLIDE_DECAY)
-			if Ding.flattened_length(velocity) < .5:
+			if Ding.flattened_length(get_real_velocity()) < .1:
 				exit_slide()
 		else:
 			goal_velocity = project_on_current_floor_normal(cam_input)
@@ -186,25 +173,35 @@ func _physics_process(delta):
 			velocity = velocity.lerp(goal_velocity, delta * lerp)
 	else:
 		lerp *= .25
-		goal_velocity = cam_input * SPEED
-		goal_velocity.y = velocity.y
+		goal_velocity = velocity
+		var dot = get_real_velocity().normalized().dot(cam_input)
+		dot = -dot
+		dot += 1
+		dot *= .5
+		goal_velocity += cam_input * SPEED * dot
+		#goal_velocity.y = velocity.y
 		velocity = velocity.lerp(goal_velocity, delta * lerp)
 		
 		# ledge grabbing
-		if can_grab_ledge and !cam_input.is_zero_approx() and cam_input.dot(get_wall_normal()) < -.85:
+		if can_grab_ledge and !cam_input.is_zero_approx() and cam_input.dot(get_wall_normal()) < -.80:
 			var body_origin := global_position
-			var body_query = PhysicsRayQueryParameters3D.create(body_origin, body_origin - get_wall_normal() * 1.5)
+			var body_query = PhysicsRayQueryParameters3D.create(body_origin, body_origin - get_wall_normal() * 1.5, 1)
 			body_query.exclude.append(get_rid())
 			var result = get_world_3d().direct_space_state.intersect_ray(body_query)
-			DebugDraw3D.draw_arrow(body_origin, body_origin - get_wall_normal() , Color.BLUE, .1)
 			if result:
-				var head_origin := global_position + Vector3.UP * 1.1
-				var head_query = PhysicsRayQueryParameters3D.create(head_origin, head_origin - get_wall_normal() * 1.5)
+				var head_origin := global_position + Vector3.UP * 1.9
+				var head_query = PhysicsRayQueryParameters3D.create(head_origin, head_origin - get_wall_normal() * 1.5, 1)
 				head_query.exclude.append(get_rid())
 				var head_result = get_world_3d().direct_space_state.intersect_ray(head_query)
-				DebugDraw3D.draw_arrow(head_origin, head_origin - get_wall_normal(), Color.BLUE, .1)
+				DebugDraw3D.draw_arrow(body_origin, body_origin - get_wall_normal() , Color.GREEN, .1)
 				if(!head_result):
 					grab_ledge()
+					DebugDraw3D.draw_arrow(head_origin, head_origin - get_wall_normal(), Color.GREEN, .1)
+				else:
+					print(head_result["collider"])
+					DebugDraw3D.draw_arrow(head_origin, head_origin - get_wall_normal(), Color.RED, .1)
+			else:
+				DebugDraw3D.draw_arrow(body_origin, body_origin - get_wall_normal() , Color.RED, .1)
 	
 	velocity += _slip * delta
 	velocity += acceleration * delta
@@ -253,6 +250,8 @@ func _physics_process(delta):
 func _landed():
 	print("landed")
 	
+	_animation_tree["parameters/Transition/transition_request"] = "run"
+	
 	var floor = get_slide_collision(0).get_collider() as StaticBody3D
 	if floor:
 		if floor.physics_material_override:			
@@ -266,7 +265,7 @@ func _landed():
 	
 	if(Input.is_action_pressed("duck")):
 		if abs(_previous_air_velocity.y) > _fall_max_speed_with_roll: crash()
-		else: enter_roll()
+		else: enter_slide()
 		return
 				
 	if abs(_previous_air_velocity.y) > _fall_max_speed:
@@ -302,7 +301,6 @@ func _took_off():
 func _jump():
 	last_time_jump_pressed = Ding.time
 	_slip = Vector3.ZERO
-	rolling = false
 
 	if(_on_ledge || grinding || is_on_floor() || Ding.time_since(last_time_left_ground_not_jump) <= COYOTE):
 		if(grinding): exit_grind()
@@ -317,34 +315,13 @@ func _jump():
 		
 		_jump_count = 1 # has jumped once
 		meshes.scale = Vector3(0.5, 1.5, 0.5)
+		_animation_tree["parameters/Transition/transition_request"] = "jump"
 		if(Ding.time_since(last_time_left_ground_not_jump) <= COYOTE):
 			print("coyote")
 	else:
 		if(_can_double_jump):
 			velocity.y = max(JUMP_VELOCITY * .8, velocity.y + JUMP_VELOCITY * .8)
 			_jump_count = 2
-
-func enter_roll():
-	print("roll")
-	#meshes.scale.y = .2
-	velocity.y = 0
-	rolling = true
-	velocity = get_projected_slope() * _previous_air_velocity.length() * .9
-	
-	#var raccoon = get_node("Node3D/Raccoon") as Node3D
-	#create_tween().tween_property(raccoon, "rotation:x", raccoon.rotation.x + 2.0 * PI, _roll_duration)
-	_animation_tree["parameters/Transition/transition_request"] = "roll"
-	
-	await get_tree().create_timer(_roll_duration).timeout
-	rolling = false
-	
-	if Input.is_action_pressed("duck"):
-		enter_slide()
-	else:
-		_animation_tree["parameters/Transition/transition_request"] = "run"
-	#sliding = false
-	#_slip = Vector3.ZERO
-	#meshes.scale.y = 1.0
 
 func enter_grind(path: Path3D, offset: float, direction:float):
 	rail = path
@@ -370,6 +347,7 @@ func exit_grind():
 
 func grab_ledge():
 	print("grabbed ledge")
+	_animation_tree["parameters/Transition/transition_request"] = "hang"
 	_on_ledge = true
 	_jump_count = 0
 	
@@ -386,12 +364,14 @@ func crash():
 	skelly.physical_bones_start_simulation()
 
 func enter_slide():
-	if(rolling): return
-	if Ding.flattened_length(velocity) > 2.0:
+	if Ding.flattened_length(velocity) > .2:
 		print("sliding")
 		_animation_tree["parameters/Transition/transition_request"] = "slide"
 		sliding = true
-		velocity = velocity * 1.1 # lil boost
+		var prev_velocity = _previous_velocity
+		prev_velocity.y *= .5
+		velocity = get_projected_slope() * prev_velocity.length()
+		#velocity = velocity * 1.1 # lil boost
 		print(velocity)
 	#meshes.scale.y = .2
 
