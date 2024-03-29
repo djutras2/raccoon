@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dyf7yehtgosux"
-path="res://.godot/imported/PizzaBox.glb-21d2065a4c31a2d2838317e8c379e1b9.scn"
+path="res://.godot/imported/PizzaBox.glb-e2b0b6c616d050ae902c2b208371edf2.scn"
 
 [deps]
 
-source_file="res://Art/Models/PizzaBox.glb"
-dest_files=["res://.godot/imported/PizzaBox.glb-21d2065a4c31a2d2838317e8c379e1b9.scn"]
+source_file="res://Art/Models/PizzaBox/PizzaBox.glb"
+dest_files=["res://.godot/imported/PizzaBox.glb-e2b0b6c616d050ae902c2b208371edf2.scn"]
 
 [params]
 
