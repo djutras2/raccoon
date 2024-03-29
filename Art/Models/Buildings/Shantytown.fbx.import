@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://oj04srnm30b1"
-path="res://.godot/imported/CharacterTest.fbx-bb70803630f3302a7be7f92b3607a2f1.scn"
+uid="uid://h86be4ovb30y"
+path="res://.godot/imported/Shantytown.fbx-aab85e3001683b670987a96cbaa6a14c.scn"
 
 [deps]
 
-source_file="res://Art/Models/Characters/CharacterTest.fbx"
-dest_files=["res://.godot/imported/CharacterTest.fbx-bb70803630f3302a7be7f92b3607a2f1.scn"]
+source_file="res://Art/Models/Buildings/Shantytown.fbx"
+dest_files=["res://.godot/imported/Shantytown.fbx-aab85e3001683b670987a96cbaa6a14c.scn"]
 
 [params]
 
